@@ -114,7 +114,7 @@ data Request = Request
 
 data Response = Response
     { resCode	 :: Int
-    , reqHeaders :: [(String,String)]
+    , resHeaders :: [(String,String)]
     , resBody    :: String
     }
      deriving Show
@@ -125,7 +125,7 @@ addCache n = ("Cache-Control","max-age=" ++ show n)
 noCache :: (String,String)
 noCache = ("Cache-Control","no-cache")
 
--- "text/html"
+-- examples include "text/html" and "text/plain"
 
 contentType :: String -> (String,String)
 contentType msg =("Content-Type",msg)

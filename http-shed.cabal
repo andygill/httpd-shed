@@ -21,7 +21,7 @@ Library
 Executable test
   Main-Is:        Main.hs
   Hs-Source-Dirs: ., test
-  buildable: False
+--  buildable: False
 
 
 	   

@@ -1,27 +1,24 @@
-Name:		http-shed
-Version:	0.1
+Name:           http-shed
+Version:        0.1
 Cabal-Version:  >= 1.2
-License:	BSD3
-License-File:	LICENSE
-Author:		Andy Gill
-Category:	Network	
-Synopsis:	A simple websever with an interact style API
+License:        BSD3
+License-File:   LICENSE
+Author:         Andy Gill
+Category:       Network 
+Synopsis:       A simple websever with an interact style API
 Description:    
-		This web server promotes a Request to IO Response function
-		into a local web server. The user can decide how to interprete
-		the requests, therefore implement Ajax APIs easily.
+                This web server promotes a Request to IO Response function
+                into a local web server. The user can decide how to interprete
+                the requests, therefore implement Ajax APIs easily.
 
-build-type:	Simple
+build-type:     Simple
 
 Library
-  Build-Depends:	base, network, unix
+  Build-Depends:        base, network
   Exposed-modules:
     Network.Shed.Httpd
 
 Executable test
   Main-Is:        Main.hs
   Hs-Source-Dirs: ., test
---  buildable: False
-
-
-	   
+  buildable: False

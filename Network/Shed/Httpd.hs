@@ -7,21 +7,20 @@
 -- Stability: unstable
 -- Portability: GHC
 --
--- An simple, almost trivial web server. 
+-- A trivial web server, original used in the cherry chess processor.
 --
--- History:
---  Originally implmented for the Cherry chess processor.
---  Reused inside HERA and hpc-tracer
 
 module Network.Shed.Httpd 
     ( Server
     , initServer
     , Request(..)
     , Response(..)
+    , queryToArguments
     ) where
 
-import System.Posix
-import System.Posix.Signals
+--import System.Posix
+--import System.Posix.Signals
+import Network.URI
 import Network
 import System.IO 
 import Control.Monad 
@@ -34,11 +33,11 @@ import qualified Data.Char as Char
 data Server = Server
 
 initServer 
-    :: Int 				-- | The port number
-    -> (Request -> IO Response) 	-- | The functionality of the Sever
-    -> IO Server			-- | A Token for the Server
+    :: Int 				-- ^ The port number
+    -> (Request -> IO Response) 	-- ^ The functionality of the Sever
+    -> IO Server			-- ^ A token for the Server
 initServer portNo callOut = do
-        installHandler sigPIPE Ignore Nothing    
+--        installHandler sigPIPE Ignore Nothing    
         chan <- newChan
         sock  <- listenOn (PortNumber $ fromIntegral portNo)
         loopIO  
@@ -47,7 +46,11 @@ initServer portNo callOut = do
                  tid <- myThreadId
                  ln <- hGetLine h
                  case words ln of
-                   [mode,url,"HTTP/1.1"]  -> readHeaders h mode url []
+                   [mode,uri,"HTTP/1.1"]  -> 
+                       case parseURIReference uri of
+                         Just uri' -> readHeaders h mode uri' []
+                         _ -> do print uri 
+                                 hClose h
                    _                      -> hClose h
                  return ()
            ) `finally` sClose sock
@@ -55,21 +58,20 @@ initServer portNo callOut = do
       loopIO m          = do m
                              loopIO m
 
-      readHeaders h mode url hds = do
+      readHeaders h mode uri hds = do
         line <- hGetLine h
         case span (/= ':') line of
-          ("\r","") -> sendRequest h mode url hds
-          (name,':':rest) -> readHeaders h mode url (hds ++ [(name,dropWhile Char.isSpace rest)])
+          ("\r","") -> sendRequest h mode uri hds
+          (name,':':rest) -> readHeaders h mode uri (hds ++ [(name,dropWhile Char.isSpace rest)])
           _ -> hClose h	-- strange format
 
       message code = show code ++ " " ++ 
                      case lookup code longMessages of
                        Just msg -> msg
                        Nothing -> "-"
-      sendRequest h mode url hds = do
+      sendRequest h mode uri hds = do
           resp <- callOut $ Request { reqMethod = mode
                                     , reqURI    = uri
-                                    , reqArgs   = args
                                     , reqHeaders = hds
                                     , reqBody   = ""
                                     }
@@ -84,29 +86,24 @@ initServer portNo callOut = do
           hPutStr h $ "\r\n"
           hPutStr h $ (resBody resp) ++ "\r\n"
           hClose h
-        where (uri,args) = splitup url
 
--- This should also cleanup names inside the uri itself
-splitup url = case span (/= '?') url of
-                 (path,'?':args) -> (path,splitargs args)
-                 (path,_) -> (path,[])
-  where
-    splitargs xs = case span (/= '=') xs of
-                     (index,'=':rest) ->
-                       case span (/= '&') rest of
-                         (value,'&':rest') -> (index,clean value) : splitargs rest'
-                         (value,_)         -> (index,clean value) : []
-                     _ -> []  
+-- | Takes an escaped query, optionally starting with '?', and returns an unescaped index-value list.
+queryToArguments :: String -> [(String,String)]
+queryToArguments ('?':rest) = queryToArguments rest
+queryToArguments input = findIx input
+   where
+     findIx = findIx' . span (/= '=') 
+     findIx' (index,'=':rest) = findVal (unEscapeString index) rest
+     findIx' _ = []
 
-    clean ('%':d1:d2:cs) 
-                 = Char.chr (read $ "0x" ++ [d1,d2])  : clean cs
-    clean (c:cs) = c : clean cs
-    clean []     = []
+     findVal index = findVal' index . span (/= '&')
+     findVal' index (value,'&':rest) = (index,unEscapeString value) : findIx rest
+     findVal' index (value,[])       = [(index,unEscapeString value)]
+     findVal' _ _ = []
 
 data Request = Request 
      { reqMethod  :: String	
-     , reqURI     :: String
-     , reqArgs    :: [(String,String)]
+     , reqURI     :: URI
      , reqHeaders :: [(String,String)]
      , reqBody    :: String
      }
@@ -128,7 +125,7 @@ noCache = ("Cache-Control","no-cache")
 -- examples include "text/html" and "text/plain"
 
 contentType :: String -> (String,String)
-contentType msg =("Content-Type",msg)
+contentType msg = ("Content-Type",msg)
 
 ------------------------------------------------------------------------------
 

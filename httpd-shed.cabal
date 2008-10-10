@@ -1,10 +1,10 @@
-Name:           http-shed
-Version:        0.1
+Name:           httpd-shed
+Version:        0.2
 Cabal-Version:  >= 1.2
 License:        BSD3
 License-File:   LICENSE
 Author:         Andy Gill
-Category:       Network 
+Category:       Network, Web
 Synopsis:       A simple websever with an interact style API
 Description:    
                 This web server promotes a Request to IO Response function

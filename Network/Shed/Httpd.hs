@@ -7,15 +7,26 @@
 -- Stability: unstable
 -- Portability: GHC
 --
--- A trivial web server, original used in the cherry chess processor.
+--
+-- A trivial web server.
+--
+-- This web server promotes a Request to IO Response function
+-- into a local web server. The user can decide how to interpret
+-- the requests, and the library is intended for implementing Ajax APIs.
+--
+-- initServerLazy (and assocated refactorings) was written by Henning Thielemann. 
 --
 
 module Network.Shed.Httpd 
     ( Server
     , initServer
+    , initServerLazy
     , Request(..)
     , Response(..)
     , queryToArguments
+    , addCache
+    , noCache
+    , contentType
     ) where
 
 --import System.Posix
@@ -26,24 +37,58 @@ import System.IO
 import Control.Monad 
 import Control.Concurrent 
 import Control.Exception as Exc
-import Control.Concurrent.Chan
 import qualified Data.List as List
 import qualified Data.Char as Char
+import Numeric (showHex)
 
-data Server = Server
+type Server = () -- later, you might have a handle for shutting down a server.
 
-initServer 
-    :: Int 				-- ^ The port number
-    -> (Request -> IO Response) 	-- ^ The functionality of the Sever
-    -> IO Server			-- ^ A token for the Server
-initServer portNo callOut = do
+{- |
+This server transfers documents as one parcel, using the content-length header.
+-}
+
+initServer
+   :: Int 			-- ^ The port number
+   -> (Request -> IO Response) 	-- ^ The functionality of the Sever
+   -> IO Server			-- ^ A token for the Server
+initServer =
+  initServerMain
+     (\body -> ([("Content-Length", show (length body))], body))
+
+{- |
+This server transfers documents in chunked mode
+and without content-length header.
+This way you can ship infinitely big documents.
+It inserts the transfer encoding header for you.
+-}
+initServerLazy
+   :: Int 			-- ^ Chunk size
+   -> Int 			-- ^ The port number
+   -> (Request -> IO Response) 	-- ^ The functionality of the Sever
+   -> IO Server			-- ^ A token for the Server
+initServerLazy chunkSize =
+  initServerMain
+     (\body ->
+        ([("Transfer-Encoding", "chunked")],
+         concatMap (\str -> showHex (length str) $ showString "\r\n" $ str) $
+         slice chunkSize body ++ [[]]))
+
+-- cf. Data.List.HT.sliceVertical
+slice :: Int -> [a] -> [[a]]
+slice n =
+  map (take n) . takeWhile (not . null) . iterate (drop n)
+
+initServerMain
+   :: (String -> ([(String, String)], String))
+   -> Int
+   -> (Request -> IO Response)
+   -> IO Server
+initServerMain processBody portNo callOut = do
 --        installHandler sigPIPE Ignore Nothing    
-        chan <- newChan
         sock  <- listenOn (PortNumber $ fromIntegral portNo)
         loopIO  
-           (do (h,nm,port) <- accept sock
+           (do (h,_nm,_port) <- accept sock
 	       forkIO $ do 
-                 tid <- myThreadId
                  ln <- hGetLine h
                  case words ln of
                    [mode,uri,"HTTP/1.1"]  -> 
@@ -74,18 +119,22 @@ initServer portNo callOut = do
                                     , reqURI    = uri
                                     , reqHeaders = hds
                                     , reqBody   = ""
-                                    }
-          hPutStr h $ "HTTP/1.1 " ++ message (resCode resp) ++ "\r\n"               
-          hPutStr h $ "Connection: close\r\n"
-          sequence [ hPutStr h $
-                             hdr ++ ": " ++ val ++ "\r\n"
-                     | (hdr,val) <- resHeaders resp 
-                   ]
-          hPutStr h $ "Content-Length: " ++ 
-                                   show (length (resBody resp)) ++ "\r\n"
-          hPutStr h $ "\r\n"
-          hPutStr h $ (resBody resp) ++ "\r\n"
+                                    } 
+          let (additionalHeaders, body) =
+                processBody $ resBody resp
+          writeLines h $
+            ("HTTP/1.1 " ++ message (resCode resp)) :
+            ("Connection: close") :
+            (map (\(hdr,val) -> hdr ++ ": " ++ val) $
+                resHeaders resp ++ additionalHeaders) ++
+            "" :
+            []
+          hPutStr h body
           hClose h
+
+writeLines :: Handle -> [String] -> IO ()
+writeLines h =
+  hPutStr h . concatMap (++"\r\n")
 
 -- | Takes an escaped query, optionally starting with '?', and returns an unescaped index-value list.
 queryToArguments :: String -> [(String,String)]
@@ -128,7 +177,7 @@ contentType :: String -> (String,String)
 contentType msg = ("Content-Type",msg)
 
 ------------------------------------------------------------------------------
-
+longMessages :: [(Int,String)]
 longMessages = 
     [ (200,"OK")
     , (404,"Not Found")

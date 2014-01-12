@@ -37,10 +37,8 @@ module Network.Shed.Httpd
 import Network.URI
 import Network
 import System.IO 
-import Control.Monad 
 import Control.Concurrent 
 import Control.Exception as Exc
-import qualified Data.List as List
 import qualified Data.Char as Char
 import Numeric (showHex)
 import qualified Network as N

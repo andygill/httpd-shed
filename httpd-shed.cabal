@@ -13,7 +13,16 @@ Description:
 
 Maintainer:     Andy Gill
 Copyright:      (c) 2009 Andy Gill
-build-type:     Simple
+Build-Type:     Simple
+
+Source-Repository this
+  Tag:         0.4.0.1
+  Type:        git
+  Location:    https://github.com/andygill/httpd-shed/
+
+Source-Repository head
+  Type:        git
+  Location:    https://github.com/andygill/httpd-shed/
 
 Flag buildExamples
   Description: Build example executables

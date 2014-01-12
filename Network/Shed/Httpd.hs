@@ -32,18 +32,22 @@ module Network.Shed.Httpd
     , contentType
     ) where
 
---import System.Posix
---import System.Posix.Signals
-import Network.URI
-import Network
-import System.IO 
-import Control.Concurrent 
-import Control.Exception as Exc
+import qualified Network as Network
+import qualified Network.Socket as Socket
+import Network.URI (URI, parseURIReference, unEscapeString)
+import Network.BSD (getProtocolNumber)
+import Network.Socket (
+          SockAddr(SockAddrInet), iNADDR_ANY,
+          bindSocket, setSocketOption, socket)
+
+import Control.Concurrent (forkIO)
+import Control.Exception (finally)
+
+import System.IO (Handle, hPutStr, hClose, hGetLine, hGetContents)
+
 import qualified Data.Char as Char
 import Numeric (showHex)
-import qualified Network as N
-import Network.BSD
-import Network.Socket
+
 
 type Server = () -- later, we might have a handle for shutting down a server.
 
@@ -102,7 +106,7 @@ and takes an additional
 -}
 initServerBind
    :: Int                               -- ^ The port number
-   -> HostAddress                       -- ^ The host address
+   -> Socket.HostAddress                -- ^ The host address
    -> (Request -> IO Response)          -- ^ The functionality of the Server
    -> IO Server                         -- ^ A token for the Server
 initServerBind port addr =
@@ -120,13 +124,13 @@ initServerMain processBody sockAddr callOut = do
 --        installHandler sigPIPE Ignore Nothing    
 --        sock  <- listenOn (PortNumber $ fromIntegral portNo)
         num <- getProtocolNumber "tcp"
-        sock <- socket AF_INET Stream num
-        setSocketOption sock ReuseAddr 1
+        sock <- socket Socket.AF_INET Socket.Stream num
+        setSocketOption sock Socket.ReuseAddr 1
         bindSocket sock sockAddr
-        listen sock maxListenQueue
+        Socket.listen sock Socket.maxListenQueue
 
         loopIO  
-           (do (h,_nm,_port) <- N.accept sock
+           (do (h,_nm,_port) <- Network.accept sock
                forkIO $ do 
                  ln <- hGetLine h
                  case words ln of
@@ -137,7 +141,7 @@ initServerMain processBody sockAddr callOut = do
                                  hClose h
                    _                      -> hClose h
                  return ()
-           ) `finally` sClose sock
+           ) `finally` Socket.sClose sock
   where 
       loopIO m = m >> loopIO m
 

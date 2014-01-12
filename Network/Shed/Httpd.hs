@@ -139,8 +139,7 @@ initServerMain processBody sockAddr callOut = do
                  return ()
            ) `finally` sClose sock
   where 
-      loopIO m          = do m
-                             loopIO m
+      loopIO m = m >> loopIO m
 
       readHeaders h mode uri hds clen = do
         line <- hGetLine h
